@@ -508,7 +508,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if file_path == "..":
                 self._mcu_dir, _ = self._mcu_dir.rsplit("/",1)
             else:
-                self._mcu_dir = "/".join([self._mcu_dir,file_path])
+                self._mcu_dir = self._mcu_dir + "/" + file_path
             self.refresh_mcu_files()
             return
 
@@ -559,9 +559,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         assert isinstance(idx, QModelIndex)
         model = self.mcuFilesListView.model()
         assert isinstance(model, RemoteFileSystemModel)
-        remote_path = model.data(idx, Qt.EditRole)
-        print(idx,remote_path)
-        return
+        remote_path = self._mcu_dir + "/" + model.data(idx, Qt.EditRole)
         local_path = self.localPathEdit.text() + "/" + remote_path
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)
