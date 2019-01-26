@@ -1,7 +1,8 @@
 import os
 import subprocess
 
-from PyQt5.QtCore import QStringListModel, QModelIndex, Qt, QItemSelectionModel, QEventLoop
+from PyQt5.QtCore import QModelIndex, Qt, QItemSelectionModel, QEventLoop
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileSystemModel, \
     QFileDialog, QInputDialog, QLineEdit, QMessageBox, QHeaderView
 
@@ -11,6 +12,7 @@ from src.connection.connection_scanner import ConnectionScanner
 from src.connection.serial_connection import SerialConnection
 from src.connection.terminal import Terminal
 from src.connection.wifi_connection import WifiConnection
+from src.gui.icons import Icons
 from src.gui.about_dialog import AboutDialog
 from src.gui.code_edit_dialog import CodeEditDialog
 from src.gui.file_transfer_dialog import FileTransferDialog
@@ -236,12 +238,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox().critical(self, "Operation failed", "Could not list files.", QMessageBox.Ok)
             return
 
-        self._mcu_files_model = QStringListModel()
+        self._mcu_files_model = QStandardItemModel()
 
         for file in file_list:
-            idx = self._mcu_files_model.rowCount()
-            self._mcu_files_model.insertRow(idx)
-            self._mcu_files_model.setData(self._mcu_files_model.index(idx), file)
+            item = QStandardItem()
+            fn = file[1:]
+            if file[0] == "#":
+                icon = Icons().tree_folder
+            elif fn.endswith(".py"):
+                icon = Icons().tree_python
+            else:
+                icon = Icons().tree_file
+
+            item.setIcon(icon)
+            item.setText(fn)
+            
+            self._mcu_files_model.appendRow(item)
+            #idx = self._mcu_files_model.rowCount()
+            #self._mcu_files_model.insertRow(idx)
+            #self._mcu_files_model.setData(self._mcu_files_model.index(idx), file)
 
         self.mcuFilesListView.setModel(self._mcu_files_model)
         self.mcu_file_selection_changed()
@@ -627,3 +642,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def close_about_dialog(self):
         self._about_dialog = None
+
+    @staticmethod
+    def _assign_icon(item, is_dir):
+        icon = Icons().tree_file
+        if is_dir:
+            icon = Icons().tree_folder
+        elif item.endswith(".py"):
+            icon = Icons().tree_python
+        return icon
+
+    def _add_entry(self, name, abs_path, is_dir, parent):
+        item = QStandardItem(name)
+        item.setIcon(self._assign_icon(name, is_dir))
+        item.setData(self._Data(abs_path), Qt.UserRole)
+        item.setEditable(False)
+        parent.appendRow(item)
+        return item

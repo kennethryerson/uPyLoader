@@ -126,7 +126,7 @@ class Connection:
     def _get_remote_file_name(local_file_path):
         return local_file_path.rsplit("/", 1)[1]
 
-    def list_files(self):
+    def list_files(self,mcu_folder="/"):
         success = True
         # Pause autoreader so we can receive response
         self._auto_reader_lock.acquire()
@@ -149,7 +149,7 @@ class Connection:
         # Now we can be sure that we are ready for listing files
         # Send command for listing files
         if success:
-            self.send_line("import os; os.listdir()")
+            self.send_line("import os; [chr(35+(os.stat(fn)[0] == 32768))+fn for fn in os.listdir(\""+mcu_folder+"\")]")
             # Wait for reply
             try:
                 ret = self.read_to_next_prompt()
