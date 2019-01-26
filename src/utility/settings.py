@@ -15,6 +15,7 @@ class Settings(metaclass=Singleton):
 
     def __init__(self):
         self.version = 100  # Assume oldest config
+        self.mcu_dir = "/"
         self.root_dir = QDir().currentPath()
         self.send_sleep = 0.1
         self.read_sleep = 0.1
@@ -86,6 +87,8 @@ class Settings(metaclass=Singleton):
         try:
             with open(RelativePathResolver().absolute("config.txt")) as file:
                 for line in file:
+                    if line.startswith("mcu_dir"):
+                        self.mcu_dir = line.strip().split("=", 1)[1]
                     if line.startswith("root_dir"):
                         self.root_dir = line.strip().split("=", 1)[1]
                     elif line.startswith("send_sleep"):

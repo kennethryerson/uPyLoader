@@ -2,7 +2,6 @@ import os
 import subprocess
 
 from PyQt5.QtCore import QModelIndex, Qt, QItemSelectionModel, QEventLoop
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileSystemModel, \
     QFileDialog, QInputDialog, QLineEdit, QMessageBox, QHeaderView
 
@@ -22,6 +21,8 @@ from src.gui.terminal_dialog import TerminalDialog
 from src.gui.wifi_preset_dialog import WiFiPresetDialog
 from src.helpers.ip_helper import IpHelper
 from src.logic.file_transfer import FileTransfer
+from src.logic.remote_file_system_model import RemoteFileSystemModel
+
 from src.utility.exceptions import PasswordException, NewPasswordException, OperationError, HostnameResolutionError
 from src.utility.file_info import FileInfo
 from src.utility.settings import Settings
@@ -43,7 +44,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._connection_scanner = ConnectionScanner()
         self._connection = None
         self._root_dir = Settings().root_dir
-        self._mcu_files_model = None
+        self._mcu_dir = Settings().mcu_dir
+        self._mcu_files_model = RemoteFileSystemModel()
         self._terminal = Terminal()
         self._terminal_dialog = None
         self._code_editor = None
@@ -231,41 +233,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return False
 
     def list_mcu_files(self):
-        file_list = []
+        self.refresh_mcu_files()
+        self.mcuFilesListView.setModel(self._mcu_files_model)
+
+    def refresh_mcu_files(self):
         try:
-            file_list = self._connection.list_files()
+            self._mcu_files_model.refresh(self._connection, self._mcu_dir)
         except OperationError:
             QMessageBox().critical(self, "Operation failed", "Could not list files.", QMessageBox.Ok)
             return
 
-        self._mcu_files_model = QStandardItemModel()
-
-        for file in file_list:
-            item = QStandardItem()
-            fn = file[1:]
-            if file[0] == "#":
-                icon = Icons().tree_folder
-            elif fn.endswith(".py"):
-                icon = Icons().tree_python
-            else:
-                icon = Icons().tree_file
-
-            item.setIcon(icon)
-            item.setText(fn)
-            
-            self._mcu_files_model.appendRow(item)
-            #idx = self._mcu_files_model.rowCount()
-            #self._mcu_files_model.insertRow(idx)
-            #self._mcu_files_model.setData(self._mcu_files_model.index(idx), file)
-
-        self.mcuFilesListView.setModel(self._mcu_files_model)
         self.mcu_file_selection_changed()
 
     def execute_mcu_code(self):
         idx = self.mcuFilesListView.currentIndex()
         assert isinstance(idx, QModelIndex)
         model = self.mcuFilesListView.model()
-        assert isinstance(model, QStringListModel)
+        assert isinstance(model, RemoteFileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
         self._connection.run_file(file_name)
 
@@ -273,7 +257,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         idx = self.mcuFilesListView.currentIndex()
         assert isinstance(idx, QModelIndex)
         model = self.mcuFilesListView.model()
-        assert isinstance(model, QStringListModel)
+        assert isinstance(model, RemoteFileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
         try:
             self._connection.remove_file(file_name)
@@ -518,13 +502,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def read_mcu_file(self, idx):
         assert isinstance(idx, QModelIndex)
         model = self.mcuFilesListView.model()
-        assert isinstance(model, QStringListModel)
-        file_name = model.data(idx, Qt.EditRole)
+        assert isinstance(model, RemoteFileSystemModel)
+        file_path = model.data(idx, Qt.EditRole)
+        if model.isDir(idx):
+            if file_path == "..":
+                self._mcu_dir, _ = self._mcu_dir.rsplit("/",1)
+            else:
+                self._mcu_dir = "/".join([self._mcu_dir,file_path])
+            self.refresh_mcu_files()
+            return
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)
-        progress_dlg.finished.connect(lambda: self.finished_read_mcu_file(file_name, progress_dlg.transfer))
+        progress_dlg.finished.connect(lambda: self.finished_read_mcu_file(file_path, progress_dlg.transfer))
         progress_dlg.show()
-        self._connection.read_file(file_name, progress_dlg.transfer)
+        self._connection.read_file(file_path, progress_dlg.transfer)
 
     def upload_transfer_scripts(self):
         progress_dlg = FileTransferDialog(FileTransferDialog.UPLOAD)
@@ -567,8 +558,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         idx = self.mcuFilesListView.currentIndex()
         assert isinstance(idx, QModelIndex)
         model = self.mcuFilesListView.model()
-        assert isinstance(model, QStringListModel)
+        assert isinstance(model, RemoteFileSystemModel)
         remote_path = model.data(idx, Qt.EditRole)
+        print(idx,remote_path)
+        return
         local_path = self.localPathEdit.text() + "/" + remote_path
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)
@@ -642,20 +635,3 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def close_about_dialog(self):
         self._about_dialog = None
-
-    @staticmethod
-    def _assign_icon(item, is_dir):
-        icon = Icons().tree_file
-        if is_dir:
-            icon = Icons().tree_folder
-        elif item.endswith(".py"):
-            icon = Icons().tree_python
-        return icon
-
-    def _add_entry(self, name, abs_path, is_dir, parent):
-        item = QStandardItem(name)
-        item.setIcon(self._assign_icon(name, is_dir))
-        item.setData(self._Data(abs_path), Qt.UserRole)
-        item.setEditable(False)
-        parent.appendRow(item)
-        return item
