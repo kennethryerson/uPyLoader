@@ -76,7 +76,6 @@ class RemoteFileSystemModel(QStandardItemModel):
         assert isinstance(connection, Connection)
         try:
             output = connection.list_files(folder)
-            print(folder, output)
 
             if folder != "/":
                 output = ["#.."]+output

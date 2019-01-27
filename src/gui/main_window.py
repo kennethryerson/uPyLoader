@@ -251,7 +251,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         model = self.mcuFilesListView.model()
         assert isinstance(model, RemoteFileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
-        remote_path = (self._mcu_dir + "/" + file_name).replace("//","/")
+        remote_path = self._mcu_dir + file_name
         self._connection.run_file(remote_path)
 
     def remove_file(self):
@@ -260,7 +260,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         model = self.mcuFilesListView.model()
         assert isinstance(model, RemoteFileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
-        remote_path = (self._mcu_dir + "/" + file_name).replace("//","/")
+        remote_path = self._mcu_dir + file_name
         try:
             self._connection.remove_file(remote_path)
         except OperationError:
@@ -373,10 +373,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         local_path = model.filePath(idx)
         remote_path = local_path.rsplit("/", 1)[1]
-        #TODO look into paths always ending with "/" rather than not. Will remove
-        #the need for hacks like // -> /
-        remote_path = (self._mcu_dir + "/" + remote_path).replace("//","/")
-        print(remote_path)
+        remote_path = self._mcu_dir + remote_path
 
         if Settings().external_editor_path:
             self.open_external_editor(local_path)
@@ -422,7 +419,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         local_file_paths = self.get_local_file_selection()
         if len(local_file_paths) == 1:
             remote_path = local_file_paths[0].rsplit("/", 1)[1]
-            remote_path = (self._mcu_dir + "/" + remote_path).replace("//","/")
+            remote_path = self._mcu_dir + remote_path
             self.remoteNameEdit.setText(remote_path)
         else:
             self.remoteNameEdit.setText("")
@@ -504,7 +501,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             text = "! Failed to read file !"
 
-        remote_path = (self._mcu_dir + "/" + file_name).replace("//","/")
+        remote_path = self._mcu_dir + file_name
         self.open_code_editor()
         self._code_editor.set_code(None, remote_path, text)
 
@@ -515,16 +512,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         file_path = model.data(idx, Qt.EditRole)
         if model.isDir(idx):
             if file_path == "..":
-                self._mcu_dir, _ = self._mcu_dir.rsplit("/",1)
+                # Because the directory string now ends with a "/" we need to add it after we split off the current directory
+                self._mcu_dir = self._mcu_dir.rsplit("/",2)[0]+"/"
             else:
-                self._mcu_dir = self._mcu_dir + "/" + file_path
+                # This ensures _mcu_dir always ends with a "/" and can easily be concatenated with a filename
+                self._mcu_dir = self._mcu_dir + file_path + "/"
             self.refresh_mcu_files()
             return
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)
         progress_dlg.finished.connect(lambda: self.finished_read_mcu_file(file_path, progress_dlg.transfer))
         progress_dlg.show()
-        self._connection.read_file(self._mcu_dir + "/" + file_path, progress_dlg.transfer)
+        self._connection.read_file(self._mcu_dir + file_path, progress_dlg.transfer)
 
     def upload_transfer_scripts(self):
         progress_dlg = FileTransferDialog(FileTransferDialog.UPLOAD)
@@ -568,7 +567,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         assert isinstance(idx, QModelIndex)
         model = self.mcuFilesListView.model()
         assert isinstance(model, RemoteFileSystemModel)
-        remote_path = self._mcu_dir + "/" + model.data(idx, Qt.EditRole)
+        remote_path = self._mcu_dir + model.data(idx, Qt.EditRole)
         local_path = self.localPathEdit.text() + "/" + remote_path
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)

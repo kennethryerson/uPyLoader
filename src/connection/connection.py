@@ -148,8 +148,9 @@ class Connection:
                 success = False
         # Now we can be sure that we are ready for listing files
         # Send command for listing files
+        # With os.listdir, the path must not end with "/" (unless it's the root, in which case "/" is equivalent to "")
         if success:
-            line = "import os; [chr(35+(os.stat(\""+mcu_folder+"/\"+fn)[0] == 32768))+fn for fn in os.listdir(\""+mcu_folder+"\")]"
+            line = "import os; [chr(35+(os.stat(\""+mcu_folder+"\"+fn)[0] == 32768))+fn for fn in os.listdir(\""+mcu_folder[:-1]+"\")]"
             self.send_line(line)
             # Wait for reply
             try:
