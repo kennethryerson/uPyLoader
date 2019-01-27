@@ -371,6 +371,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         local_path = model.filePath(idx)
         remote_path = local_path.rsplit("/", 1)[1]
+        #TODO look into paths always ending with "/" rather than not. Will remove
+        #the need for hacks like // -> /
+        remote_path = (self._mcu_dir + "/" + remote_path).replace("//","/")
+        print(remote_path)
 
         if Settings().external_editor_path:
             self.open_external_editor(local_path)
@@ -415,7 +419,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_compile_button()
         local_file_paths = self.get_local_file_selection()
         if len(local_file_paths) == 1:
-            self.remoteNameEdit.setText(local_file_paths[0].rsplit("/", 1)[1])
+            remote_path = local_file_paths[0].rsplit("/", 1)[1]
+            remote_path = (self._mcu_dir + "/" + remote_path).replace("//","/")
+            self.remoteNameEdit.setText(remote_path)
         else:
             self.remoteNameEdit.setText("")
 
@@ -515,7 +521,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)
         progress_dlg.finished.connect(lambda: self.finished_read_mcu_file(file_path, progress_dlg.transfer))
         progress_dlg.show()
-        self._connection.read_file(file_path, progress_dlg.transfer)
+        self._connection.read_file(self._mcu_dir + "/" + file_path, progress_dlg.transfer)
 
     def upload_transfer_scripts(self):
         progress_dlg = FileTransferDialog(FileTransferDialog.UPLOAD)

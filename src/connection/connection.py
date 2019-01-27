@@ -149,7 +149,8 @@ class Connection:
         # Now we can be sure that we are ready for listing files
         # Send command for listing files
         if success:
-            self.send_line("import os; [chr(35+(os.stat(fn)[0] == 32768))+fn for fn in os.listdir(\""+mcu_folder+"\")]")
+            line = "import os; [chr(35+(os.stat(\""+mcu_folder+"/\"+fn)[0] == 32768))+fn for fn in os.listdir(\""+mcu_folder+"\")]"
+            self.send_line(line)
             # Wait for reply
             try:
                 ret = self.read_to_next_prompt()
