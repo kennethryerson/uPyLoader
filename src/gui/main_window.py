@@ -192,6 +192,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def connected(self):
         self.connectButton.setText("Disconnect")
         self.set_status("Connected")
+        self.label_4.setText("Remote (%s)" % ("/"+self._mcu_dir[:-1]).replace("//","/"))
         self.listButton.setEnabled(True)
         self.connectionComboBox.setEnabled(False)
         self.baudComboBox.setEnabled(False)
@@ -518,6 +519,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # This ensures _mcu_dir always ends with a "/" and can easily be concatenated with a filename
                 self._mcu_dir = self._mcu_dir + file_path + "/"
             self.refresh_mcu_files()
+            self.label_4.setText("Remote (%s)" % ("/"+self._mcu_dir[:-1]).replace("//","/"))
             return
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)
