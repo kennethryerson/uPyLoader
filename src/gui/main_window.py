@@ -251,7 +251,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         model = self.mcuFilesListView.model()
         assert isinstance(model, RemoteFileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
-        self._connection.run_file(file_name)
+        remote_path = (self._mcu_dir + "/" + file_name).replace("//","/")
+        self._connection.run_file(remote_path)
 
     def remove_file(self):
         idx = self.mcuFilesListView.currentIndex()
@@ -259,8 +260,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         model = self.mcuFilesListView.model()
         assert isinstance(model, RemoteFileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
+        remote_path = (self._mcu_dir + "/" + file_name).replace("//","/")
         try:
-            self._connection.remove_file(file_name)
+            self._connection.remove_file(remote_path)
         except OperationError:
             QMessageBox().critical(self, "Operation failed", "Could not remove the file.", QMessageBox.Ok)
             return
@@ -502,8 +504,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             text = "! Failed to read file !"
 
+        remote_path = (self._mcu_dir + "/" + file_name).replace("//","/")
         self.open_code_editor()
-        self._code_editor.set_code(None, file_name, text)
+        self._code_editor.set_code(None, remote_path, text)
 
     def read_mcu_file(self, idx):
         assert isinstance(idx, QModelIndex)
