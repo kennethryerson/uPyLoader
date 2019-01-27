@@ -411,7 +411,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # don't include directories
         indices = [x for x in indices if filter_indices(x)]
 
-        # Return absolute paths
+        # Return absolute paths based on currently selected _mcu_dir
         return [model.filePath(idx) for idx in indices]
 
     def local_file_selection_changed(self):
@@ -550,7 +550,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Batch file transfer
         progress_dlg.enable_cancel()
         progress_dlg.transfer.set_file_count(len(local_file_paths))
-        self._connection.write_files(local_file_paths, progress_dlg.transfer)
+        self._connection.write_files(local_file_paths, self._mcu_dir, progress_dlg.transfer, progress_dlg.setText)
 
     def finished_transfer_to_pc(self, file_path, transfer):
         if not transfer.read_result.binary_data:

@@ -34,6 +34,11 @@ class FileTransferDialog(QDialog, Ui_FileTransferDialog):
     def enable_cancel(self):
         self.cancelButton.setEnabled(True)
 
+    def setText(self,s=None):
+        if s is None:
+            s = "Saving file."
+        self.label.setText(s)
+
     def _update_progress(self):
         if self._transfer.error:
             additional_info = ""

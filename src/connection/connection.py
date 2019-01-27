@@ -123,8 +123,8 @@ class Connection:
             time.sleep(0.1 if not x else 0)
 
     @staticmethod
-    def _get_remote_file_name(local_file_path):
-        return local_file_path.rsplit("/", 1)[1]
+    def _get_remote_file_name(local_file_path,mcu_dir):
+        return mcu_dir + local_file_path.rsplit("/", 1)[1]
 
     def list_files(self,mcu_folder="/"):
         success = True
@@ -174,9 +174,16 @@ class Connection:
         job_thread.setDaemon(True)
         job_thread.start()
 
-    def _write_files_job(self, local_file_paths, transfer):
-        for local_path in local_file_paths:
-            remote_name = self._get_remote_file_name(local_path)
+    def _write_files_job(self, local_file_paths, mcu_dir, transfer, set_text=None):
+        n_files = len(local_file_paths)
+
+        for i in range(n_files):
+            local_path  = local_file_paths[i]
+            remote_name = self._get_remote_file_name(local_path, mcu_dir)
+            if set_text is not None:
+                s = "Saving '%s' (%d/%d)." % (remote_name,i+1,n_files)
+                set_text(s)
+
             with open(local_path, "rb") as f:
                 content = f.read()
                 self._write_file_job(remote_name, content, transfer)
@@ -185,9 +192,9 @@ class Connection:
                 if transfer.error or transfer.cancelled:
                     break
 
-    def write_files(self, local_file_paths, transfer):
+    def write_files(self, local_file_paths, mcu_dir, transfer, set_text=None):
         job_thread = Thread(target=self._write_files_job,
-                            args=(local_file_paths, transfer))
+                            args=(local_file_paths, mcu_dir, transfer, set_text))
         job_thread.setDaemon(True)
         job_thread.start()
 
