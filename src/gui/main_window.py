@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from PyQt5.QtCore import QModelIndex, Qt, QItemSelectionModel, QEventLoop
+from PyQt5.QtCore import QCoreApplication, QModelIndex, Qt, QItemSelectionModel, QEventLoop
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileSystemModel, \
     QFileDialog, QInputDialog, QLineEdit, QMessageBox, QHeaderView
 
@@ -20,6 +20,7 @@ from src.gui.settings_dialog import SettingsDialog
 from src.gui.terminal_dialog import TerminalDialog
 from src.gui.wifi_preset_dialog import WiFiPresetDialog
 from src.helpers.ip_helper import IpHelper
+from src.helpers.copy_helper import copy_steps
 from src.logic.file_transfer import FileTransfer
 from src.logic.remote_file_system_model import RemoteFileSystemModel
 
@@ -41,6 +42,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if geometry:
             self.localFilesTreeView.header().restoreState(geometry)
 
+        self._translate = QCoreApplication.translate
+
         self._connection_scanner = ConnectionScanner()
         self._connection = None
         self._root_dir = Settings().root_dir
@@ -53,6 +56,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._settings_dialog = None
         self._about_dialog = None
         self._preset_password = None
+        self.label_7.setText(self._translate("MainWindow", "Local")+" (%s)" % self._root_dir)
 
         self.actionNavigate.triggered.connect(self.navigate_directory)
         self.actionTerminal.triggered.connect(self.open_terminal)
@@ -217,6 +221,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._root_dir = path[0]
             self.localPathEdit.setText(self._root_dir)
             self.update_file_tree()
+            self.label_7.setText(self._translate("MainWindow", "Local")+" (%s)" % self._root_dir)
 
     def update_file_tree(self):
         model = QFileSystemModel()
@@ -406,7 +411,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         assert isinstance(model, QFileSystemModel)
 
         def filter_indices(x):
-            return x.column() == 0 and not model.isDir(x)
+            ret = False
+            if x.column() == 0:
+                ret = True
+            #return x.column() == 0 and not model.isDir(x)
+            return ret
 
         # Filter out all but first column (file name) and
         # don't include directories
@@ -533,26 +542,41 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         progress_dlg.show()
         self._connection.upload_transfer_files(progress_dlg.transfer)
 
+    #File and folders
+    def get_local_ff_selection(self):
+        """Returns absolute paths for selected local files"""
+        indices = self.localFilesTreeView.selectedIndexes()
+        model = self.localFilesTreeView.model()
+        assert isinstance(model, QFileSystemModel)
+
+        def filter_indices(x):
+            ret = False
+            if x.column() == 0:
+                ret = True
+            #return x.column() == 0 and not model.isDir(x)
+            return ret
+
+        # Filter out all but first column (file name)
+        ret = []
+        for idx in indices:
+            if filter_indices(idx):
+                ret += copy_steps(model.filePath(idx),self._mcu_dir)
+
+        return ret
+
     def transfer_to_mcu(self):
-        local_file_paths = self.get_local_file_selection()
+        path_steps = self.get_local_ff_selection()
 
         progress_dlg = FileTransferDialog(FileTransferDialog.UPLOAD)
         progress_dlg.finished.connect(self.list_mcu_files)
+        progress_dlg.enable_cancel()
+        progress_dlg.transfer.set_file_count(len(path_steps))
         progress_dlg.show()
 
-        # Handle single file transfer
-        if len(local_file_paths) == 1:
-            local_path = local_file_paths[0]
-            remote_path = self.remoteNameEdit.text()
-            with open(local_path, "rb") as f:
-                content = f.read()
-            self._connection.write_file(remote_path, content, progress_dlg.transfer)
-            return
+        self._connection.write_steps(self._root_dir, path_steps, progress_dlg.transfer, progress_dlg.setText)
 
         # Batch file transfer
-        progress_dlg.enable_cancel()
-        progress_dlg.transfer.set_file_count(len(local_file_paths))
-        self._connection.write_files(local_file_paths, self._mcu_dir, progress_dlg.transfer, progress_dlg.setText)
+        #self._connection.write_files(local_file_paths, self._mcu_dir, progress_dlg.transfer, progress_dlg.setText)
 
     def finished_transfer_to_pc(self, file_path, transfer):
         if not transfer.read_result.binary_data:

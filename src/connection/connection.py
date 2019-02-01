@@ -71,6 +71,7 @@ class Connection:
         # Prevent echo
         self._auto_reader_lock.acquire()
         self._auto_read_enabled = False
+        #self.send_line("import os; if os.stat(\"{}\")[0]==32768: os.remove(\"{}\")".format(file_name))
         self.send_line("import os; os.remove(\"{}\")".format(file_name))
         try:
             self.read_to_next_prompt()
@@ -165,6 +166,15 @@ class Connection:
         else:
             raise OperationError()
 
+    def _make_dir_job(self, remote_name, transfer):
+        raise NotImplementedError()
+
+    def make_dir(self, file_name, transfer):
+        job_thread = Thread(target=self._make_dir_job,
+                            args=(file_name, transfer))
+        job_thread.setDaemon(True)
+        job_thread.start()
+
     def _write_file_job(self, remote_name, content, transfer):
         raise NotImplementedError()
 
@@ -195,6 +205,39 @@ class Connection:
     def write_files(self, local_file_paths, mcu_dir, transfer, set_text=None):
         job_thread = Thread(target=self._write_files_job,
                             args=(local_file_paths, mcu_dir, transfer, set_text))
+        job_thread.setDaemon(True)
+        job_thread.start()
+
+    def _write_steps_job(self, root_dir, path_steps, transfer, set_text=None):
+        n_steps = len(path_steps)
+
+        for i in range(n_steps):
+            local_path,remote_name = path_steps[i]
+            title = "Step %d/%d: " % (i+1,n_steps)
+
+            if local_path is None:
+                title += "Creating folder "+remote_name
+                if set_text is not None:
+                    set_text(title)
+                self._make_dir_job(remote_name, transfer)
+            else:
+                title += "Uploading ..."+local_path.replace(root_dir,"")
+                if set_text is not None:
+                    set_text(title)
+                with open(local_path, "rb") as f:
+                    content = f.read()
+                    self._write_file_job(remote_name, content, transfer)
+                    if transfer.cancel_scheduled:
+                        transfer.confirm_cancel()
+                    if transfer.error or transfer.cancelled:
+                        break
+
+            if transfer.error or transfer.cancelled:
+                break
+
+    def write_steps(self, root_dir, path_steps, transfer, set_text=None):
+        job_thread = Thread(target=self._write_steps_job,
+                            args=(root_dir, path_steps, transfer, set_text))
         job_thread.setDaemon(True)
         job_thread.start()
 

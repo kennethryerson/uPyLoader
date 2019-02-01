@@ -151,7 +151,7 @@ class SerialConnection(Connection):
         try:
             resp = self.read_to_next_prompt()
             idx = resp.find("#V")
-            if idx < 0 or resp[idx:idx+3] != "#V2":
+            if idx < 0 or resp[idx:idx+3] != "#V3":
                 raise ValueError
             self.read_junk()
             self.send_block("with open(\"__download.py\") as f:\n  f.readline()\n")
@@ -213,7 +213,7 @@ class SerialConnection(Connection):
                 self.send_file(data.encode('utf-8'), transfer)
             transfer.mark_finished()
 
-            self.run_file("__upload.py", "file_name=\"{}\"".format("__download.py"))
+            self.run_file("__upload.py", "file_name=\"{}\";is_dir=False".format("__download.py"))
             self.read_all()
             with open(SerialConnection._transfer_file_path("download.py")) as f:
                 data = f.read()
@@ -313,6 +313,18 @@ class SerialConnection(Connection):
         transfer.read_result.binary_data = None
         self.handle_transfer_error("")
 
+    def _make_dir_job(self, file_name, transfer):
+        self._auto_reader_lock.acquire()
+        self._auto_read_enabled = False
+        if Settings().use_transfer_scripts:
+            self.run_file("__upload.py", "file_name=\"{}\";is_dir=True".format(file_name))
+        else:
+            raise NotImplementedError()
+
+        transfer.mark_finished()
+        self._auto_read_enabled = True
+        self._auto_reader_lock.release()
+
     def _write_file_job(self, file_name, text, transfer):
         if isinstance(text, str):
             text = text.encode('utf-8')
@@ -320,7 +332,7 @@ class SerialConnection(Connection):
         self._auto_reader_lock.acquire()
         self._auto_read_enabled = False
         if Settings().use_transfer_scripts:
-            self.run_file("__upload.py", "file_name=\"{}\"".format(file_name))
+            self.run_file("__upload.py", "file_name=\"{}\";is_dir=False".format(file_name))
         else:
             try:
                 self.send_upload_file(file_name)
