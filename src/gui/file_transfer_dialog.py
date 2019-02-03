@@ -10,8 +10,10 @@ from src.logic.file_transfer import FileTransfer
 class FileTransferDialog(QDialog, Ui_FileTransferDialog):
     _update_signal = pyqtSignal()
 
+    #FIXME Use the same convention throughout...
     UPLOAD = 0
     DOWNLOAD = 1
+    DELETE = 2
 
     def __init__(self, type):
         super(FileTransferDialog, self).__init__(None, Qt.WindowTitleHint)
@@ -24,6 +26,8 @@ class FileTransferDialog(QDialog, Ui_FileTransferDialog):
             self.label.setText("Saving file.")
         elif type == FileTransferDialog.DOWNLOAD:
             self.label.setText("Reading file.")
+        elif type == FileTransferDialog.DELETE:
+            self.label.setText("Deleting file.")
 
         self.progressBar.setRange(0, 100)
 

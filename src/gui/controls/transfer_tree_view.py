@@ -16,7 +16,6 @@ class TransferTreeView(QTreeView):
         header = self.header()
         header.sectionDoubleClicked.connect(self._header_double_clicked_handler)
 
-        self._add_menu_action("Transfer", self._transfer_handler)
         # TODO: Implement
         # self._add_menu_action("Transfer changed", self._transfer_changed_handler)
         self.context_menu.addSeparator()

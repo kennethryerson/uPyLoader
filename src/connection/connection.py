@@ -3,6 +3,7 @@ import re
 from threading import Lock, Thread
 
 from src.utility.exceptions import OperationError
+from src.utility.settings import Settings
 
 
 class Connection:
@@ -65,22 +66,6 @@ class Connection:
         self.send_line("with open(\"{}\") as f:".format(file_name))
         self.send_line("    exec(f.read(), globals())")
         self.send_end_paste()
-
-    def remove_file(self, file_name):
-        success = True
-        # Prevent echo
-        self._auto_reader_lock.acquire()
-        self._auto_read_enabled = False
-        #self.send_line("import os; if os.stat(\"{}\")[0]==32768: os.remove(\"{}\")".format(file_name))
-        self.send_line("import os; os.remove(\"{}\")".format(file_name))
-        try:
-            self.read_to_next_prompt()
-        except TimeoutError:
-            success = False
-        self._auto_read_enabled = True
-        self._auto_reader_lock.release()
-        if not success:
-            raise OperationError()
 
     def get_file_size(self, file_name):
         success = True
@@ -166,8 +151,17 @@ class Connection:
         else:
             raise OperationError()
 
-    def _make_dir_job(self, remote_name, transfer):
-        raise NotImplementedError()
+    def _make_dir_job(self, file_name, transfer):
+        self._auto_reader_lock.acquire()
+        self._auto_read_enabled = False
+        if Settings().use_transfer_scripts:
+            self.send_line("import os; os.mkdir(\"{}\")".format(file_name))
+        else:
+            raise NotImplementedError()
+
+        transfer.mark_finished()
+        self._auto_read_enabled = True
+        self._auto_reader_lock.release()
 
     def make_dir(self, file_name, transfer):
         job_thread = Thread(target=self._make_dir_job,
@@ -217,13 +211,11 @@ class Connection:
 
             if local_path is None:
                 title += "Creating folder "+remote_name
-                if set_text is not None:
-                    set_text(title)
+                if set_text is not None: set_text(title)
                 self._make_dir_job(remote_name, transfer)
             else:
                 title += "Uploading ..."+local_path.replace(root_dir,"")
-                if set_text is not None:
-                    set_text(title)
+                if set_text is not None: set_text(title)
                 with open(local_path, "rb") as f:
                     content = f.read()
                     self._write_file_job(remote_name, content, transfer)
@@ -238,6 +230,38 @@ class Connection:
     def write_steps(self, root_dir, path_steps, transfer, set_text=None):
         job_thread = Thread(target=self._write_steps_job,
                             args=(root_dir, path_steps, transfer, set_text))
+        job_thread.setDaemon(True)
+        job_thread.start()
+
+    def _remove_file_job(self, file_name, transfer, set_text):
+        #TODO use translate (?)
+        s = "Removing %s, please wait..." % file_name
+        if set_text is not None: set_text(s)
+        self._auto_reader_lock.acquire()
+        self._auto_read_enabled = False
+
+        success = False
+        if Settings().use_transfer_scripts:
+            self.send_line("import __upl; __upl.remove(\"{}\")".format(file_name))
+        else:
+            #This will only remove files, not folders
+            self.send_line("import os; os.remove(\"{}\")".format(file_name))
+        try:
+            self.read_to_next_prompt()
+            success = True
+        except TimeoutError:
+            success = False
+
+        transfer.mark_finished()
+        self._auto_read_enabled = True
+        self._auto_reader_lock.release()
+
+        if not success:
+            raise OperationError()
+
+    def remove_file(self, file_name, transfer, set_text=None):
+        job_thread = Thread(target=self._remove_file_job,
+                            args=(file_name, transfer, set_text))
         job_thread.setDaemon(True)
         job_thread.start()
 

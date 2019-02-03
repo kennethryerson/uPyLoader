@@ -230,6 +230,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         local_selection_model = self.localFilesTreeView.selectionModel()
         local_selection_model.selectionChanged.connect(self.local_file_selection_changed)
         self.localFilesTreeView.setRootIndex(model.index(self._root_dir))
+        self.localFilesTreeView._add_menu_action("Transfer", self.transfer_to_mcu)
+        self.localFilesTreeView._add_menu_action("Compile", self.compile_files)
 
     def serial_mcu_connection_valid(self):
         try:
@@ -267,8 +269,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         assert isinstance(model, RemoteFileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
         remote_path = self._mcu_dir + file_name
+
+        progress_dlg = FileTransferDialog(FileTransferDialog.DELETE)
+        progress_dlg.finished.connect(self.list_mcu_files)
+        progress_dlg.show()
+
         try:
-            self._connection.remove_file(remote_path)
+            self._connection.remove_file(remote_path, progress_dlg.transfer, progress_dlg.setText)
         except OperationError:
             QMessageBox().critical(self, "Operation failed", "Could not remove the file.", QMessageBox.Ok)
             return
