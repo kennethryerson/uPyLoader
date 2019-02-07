@@ -230,12 +230,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         local_selection_model = self.localFilesTreeView.selectionModel()
         local_selection_model.selectionChanged.connect(self.local_file_selection_changed)
         self.localFilesTreeView.setRootIndex(model.index(self._root_dir))
-        self.localFilesTreeView._add_menu_action("Transfer", self.transfer_to_mcu)
+        #self.localFilesTreeView._add_menu_action("Edit", self.edit_files)
         self.localFilesTreeView._add_menu_action("Compile", self.compile_files)
+        self.localFilesTreeView._add_menu_action("Transfer", self.transfer_to_mcu)
 
     def serial_mcu_connection_valid(self):
         try:
-            self._connection.list_files()
+            self._connection.list_statvfs()
             return True
         except OperationError:
             return False
@@ -411,6 +412,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.removeButton.setEnabled(False)
             self.transferToPcButton.setEnabled(False)
 
+        used_KB = 0
+        available_KB = 0
+        full_pc = 100
+        statvfs = self._connection.statvfs 
+        if statvfs is not None:
+            total_KB = statvfs[0]*statvfs[2]/1024.
+            available_KB = statvfs[0]*statvfs[3]/1024.
+            used_KB = total_KB - available_KB
+            full_pc = used_KB / total_KB * 100
+
+        s = "Remote ({})".format( ("/"+self._mcu_dir[:-1]).replace("//","/") )
+        self.label_4.setText(s)
+
     def get_local_file_selection(self):
         """Returns absolute paths for selected local files"""
         indices = self.localFilesTreeView.selectedIndexes()
@@ -535,7 +549,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # This ensures _mcu_dir always ends with a "/" and can easily be concatenated with a filename
                 self._mcu_dir = self._mcu_dir + file_path + "/"
             self.refresh_mcu_files()
-            self.label_4.setText("Remote (%s)" % ("/"+self._mcu_dir[:-1]).replace("//","/"))
             return
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)

@@ -37,6 +37,9 @@ def remove(file_name):
 
     sys.stdout.write("#0" if suc else "#4")
 
+def listdir(mcu_folder):
+       return [ chr(35+(os.stat(mcu_folder+fn)[0] == 32768))+fn
+           for fn in os.listdir(mcu_folder[:-1])]
 
 def upload(file_name):
     suc = False
@@ -52,8 +55,14 @@ def upload(file_name):
                 break
             d = _read_timeout(cnt)
             if d:
-                f.write(a2b_base64(d))
-                sys.stdout.write("#1")
+                try:
+                    f.write(a2b_base64(d))
+                except OSError as e:
+                    sys.stdout.write("#5")
+                    sys.print_exception(e)
+                    break
+                else:
+                    sys.stdout.write("#1")
             else:
                 sys.stdout.write("#3")
                 break

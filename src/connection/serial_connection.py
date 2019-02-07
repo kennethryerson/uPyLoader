@@ -155,6 +155,7 @@ class SerialConnection(Connection):
                 raise ValueError
         except (TimeoutError, ValueError):
             success = False
+
         self._auto_read_enabled = True
         self._auto_reader_lock.release()
         return success
@@ -246,12 +247,15 @@ class SerialConnection(Connection):
                 error = "Device didn't receive next message in time or message header got corrupted."
             elif ack == b"#3":
                 error = "Device didn't receive as much data as was indicated in the message header."
+            elif ack == b"#5":
+                error = "No space left on device (or filesystem corrupted)."
             elif ack != b"#1":
                 error = "Error in protocol. Expected #1 but device replied with:\n{}.".format(
                     ack.decode(errors='ignore'))
 
             if error:
-                error += "\n\nLast message was:\n{}.".format(chunk.decode(errors='ignore'))
+                if error.startswith("Error"):
+                    error += "\n\nLast message was:\n{}.".format(chunk.decode(errors='ignore'))
                 self.handle_transfer_error(error)
 
             idx += len(chunk)
@@ -306,9 +310,7 @@ class SerialConnection(Connection):
         self._auto_reader_lock.acquire()
         self._auto_read_enabled = False
         if Settings().use_transfer_scripts:
-            self.send_start_paste()
-            self.send_line("import __upl; __upl.upload(\"{}\")".format(file_name))
-            self.send_end_paste()
+            self._send_command("__upl.upload",file_name,paste=True)
         else:
             try:
                 self.send_upload_file(file_name)
@@ -334,9 +336,7 @@ class SerialConnection(Connection):
         self._auto_reader_lock.acquire()
         self._auto_read_enabled = False
         if Settings().use_transfer_scripts:
-            self.send_start_paste()
-            self.send_line("import __upl; __upl.download(\"{}\")".format(file_name))
-            self.send_end_paste()
+            self._send_command("__upl.download",file_name,paste=True)
         else:
             try:
                 self.send_download_file(file_name)

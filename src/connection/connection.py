@@ -12,6 +12,7 @@ class Connection:
         self._reader_running = False
         self._auto_read_enabled = True
         self._auto_reader_lock = Lock()
+        self.statvfs = None
 
     def is_connected(self):
         raise NotImplementedError()
@@ -38,7 +39,10 @@ class Connection:
             if (time.time() - t_start) >= timeout:
                 raise TimeoutError()
             ret += self.read_one_byte()
-        return ret.decode("utf-8", errors="replace")
+        ret = ret[:-4]
+        ret = ret.decode("utf-8", errors="replace").strip()
+        #print("-->"+ret+"<--")
+        return ret
 
     def send_line(self, line_text, ending="\r\n"):
         raise NotImplementedError()
@@ -112,52 +116,112 @@ class Connection:
     def _get_remote_file_name(local_file_path,mcu_dir):
         return mcu_dir + local_file_path.rsplit("/", 1)[1]
 
-    def list_files(self,mcu_folder="/"):
-        success = True
+    # Super simple command parser.
+    # Assuming need to send a command such as os.mkdir("/folder")
+    # command is os.mkdir and args is "/folder")
+    # if an arg is unicode or str it is escaped and quoted.
+    # if a return is needed, use the code to clean-up the prompt first
+    # then return the prompt
+
+    def _send_command(self,command,args=[],paste=False,ret=False):
+        output = ""
+
+        if "." in command:
+            module, command = command.split(".",1)
+        else:
+            module = "os"
+
+        if type(args) not in [list,tuple]: args = [args]
+
+        line = "import {0};{0}.{1}".format(module,command)
+        sarg = ""
+        for arg in args:
+            if type(arg) == str:
+                arg = "\"{}\"".format(arg)
+            else:
+                arg = str(arg)
+            sarg+=arg+","
+        if sarg.endswith(","): sarg=sarg[:-1]
+        line = line+"({})".format(sarg)
+
+        #Do we need a returned argument?
+        if ret:
+            self.send_kill()
+            # Read any leftovers
+            self.read_junk()
+            # Mark the start of file listing communication
+            self.send_line("print('#fs#')")
+            # Now we either wait for any running program to finish
+            # or read output that it might be producing until it finally
+            # closes and our command gets executed.
+            success = True
+            while "#fs#" not in output:
+                try:
+                    output = self.read_to_next_prompt()
+                except TimeoutError:
+                    success = False
+
+            if not success:
+                return ""
+
+        # Now we can be sure that we are ready for listing files
+        # Send command for listing files
+        if paste: self.send_start_paste()
+        self.send_line(line)
+        if paste: self.send_end_paste()
+
+        # Wait for reply
+        if ret:
+            try:
+                output = self.read_to_next_prompt()
+            except TimeoutError:
+                return ""
+
+        return output
+
+    def list_statvfs(self):
         # Pause autoreader so we can receive response
         self._auto_reader_lock.acquire()
         self._auto_read_enabled = False
-        # Stop any running script
-        self.send_kill()
-        # Read any leftovers
-        self.read_junk()
-        # Mark the start of file listing communication
-        self.send_line("print('#fs#')")
-        # Now we either wait for any running program to finish
-        # or read output that it might be producing until it finally
-        # closes and our command gets executed.
-        ret = ""
-        while "#fs#" not in ret:
-            try:
-                ret = self.read_to_next_prompt()
-            except TimeoutError:
-                success = False
-        # Now we can be sure that we are ready for listing files
-        # Send command for listing files
-        # With os.listdir, the path must not end with "/" (unless it's the root, in which case "/" is equivalent to "")
-        if success:
-            line = "import os; [chr(35+(os.stat(\""+mcu_folder+"\"+fn)[0] == 32768))+fn for fn in os.listdir(\""+mcu_folder[:-1]+"\")]"
-            self.send_line(line)
-            # Wait for reply
-            try:
-                ret = self.read_to_next_prompt()
-            except TimeoutError:
-                success = False
+
+        output = self._send_command('os.statvfs','/',ret=True)
+
         self._auto_read_enabled = True
         self._auto_reader_lock.release()
 
-        if success and ret:
-            return re.findall("'([^']+)'", ret)
-        else:
+        if output == "":
             raise OperationError()
+        else:
+            output = output.split("\n")[1][1:-1].split(", ")
+            output = [int(val) for val in output]
+            self.statvfs = output
+            return output
+
+    def list_files(self,mcu_folder="/"):
+        # Pause autoreader so we can receive response
+        self._auto_reader_lock.acquire()
+        self._auto_read_enabled = False
+
+        output = self._send_command("__upl.listdir",mcu_folder,ret=True)
+
+        self._auto_read_enabled = True
+        self._auto_reader_lock.release()
+
+
+        if output == "":
+            raise OperationError()
+        else:
+            if "[" in output:
+                ret = re.findall("'([^']+)'", output)
+            else:
+                ret = []
+            return ret
+
 
     def _make_dir_job(self, file_name, transfer):
         self._auto_reader_lock.acquire()
         self._auto_read_enabled = False
-        if Settings().use_transfer_scripts:
-            self.send_line("import os; os.mkdir(\"{}\")".format(file_name))
-        else:
-            raise NotImplementedError()
+        self._send_command("os.mkdir",file_name,paste=True)
 
         transfer.mark_finished()
         self._auto_read_enabled = True
@@ -241,11 +305,12 @@ class Connection:
         self._auto_read_enabled = False
 
         success = False
+        command = "os.remove"
         if Settings().use_transfer_scripts:
-            self.send_line("import __upl; __upl.remove(\"{}\")".format(file_name))
-        else:
-            #This will only remove files, not folders
-            self.send_line("import os; os.remove(\"{}\")".format(file_name))
+            #This removes both files and folders recursively
+            command = "__upl.remove"
+        self._send_command(command,file_name)
+
         try:
             self.read_to_next_prompt()
             success = True
