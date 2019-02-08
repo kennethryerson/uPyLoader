@@ -51,11 +51,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self._root_dir = Settings().root_dir
         self._local_files_model = FileSystemModel(parent=self.localFilesListView,is_local=True)
-        self.localFilesListView._add_menu_action("Edit", self.edit_file)
+        self.localFilesListView._add_menu_action("Edit", self.open_local_file)
         self.localFilesListView._add_menu_action("Compile", self.compile_files)
         self.localFilesListView._add_menu_action("Transfer", self.transfer_to_mcu)
         self.localFilesListView.clicked.connect(self.local_file_selection_changed)
         self.localFilesListView.doubleClicked.connect(self.open_local_file)
+        self.localFilesListView.setModel(self._local_files_model)
+        self.localFilesListView.selectionModel().selectionChanged.connect(self.local_file_selection_changed)
 
         self._mcu_dir = Settings().mcu_dir
         self._mcu_files_model = FileSystemModel(parent=self.mcuFilesListView,is_local=False)
@@ -63,10 +65,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.mcuFilesListView._add_menu_action("Execute", self.execute_mcu_code)
         self.mcuFilesListView._add_menu_action("Rename", self.rename_file)
         self.mcuFilesListView._add_menu_action("Remove", self.remove_file)
-        self.mcuFilesListView._add_menu_action("|New Folder", self.refresh_mcu_files)
-        self.mcuFilesListView._add_menu_action("Refresh", self.refresh_mcu_files)
+        self.mcuFilesListView._add_menu_action("|New Folder", self.list_mcu_files)
+        self.mcuFilesListView._add_menu_action("Refresh", self.list_mcu_files)
         self.mcuFilesListView.clicked.connect(self.mcu_file_selection_changed)
         self.mcuFilesListView.doubleClicked.connect(self.read_mcu_file)
+        self.mcuFilesListView.setModel(self._mcu_files_model)
+        self.mcuFilesListView.selectionModel().selectionChanged.connect(self.mcu_file_selection_changed)
 
         self._terminal = Terminal()
         self._terminal_dialog = None
@@ -98,7 +102,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.presetButton.clicked.connect(self.show_presets)
         self.connectButton.clicked.connect(self.connect_pressed)
 
-        self.refresh_local_files()
+        self.list_local_files()
 
         self.executeButton.clicked.connect(self.execute_mcu_code)
         self.removeButton.clicked.connect(self.remove_file)
@@ -235,13 +239,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             root_dir = os.path.normpath(root_dir)
             self._root_dir = root_dir
             self.localPathEdit.setText(root_dir)
-            self.refresh_local_files()
+            self.list_local_files()
             self.label_7.setText(self._translate("MainWindow", "Local")+" (%s)" % root_dir)
 
-    def refresh_local_files(self):
+    def list_local_files(self):
         try:
             self._local_files_model.refresh(None,self._root_dir)
-            self.localFilesListView.setModel(self._local_files_model)
 
         except OperationError:
             QMessageBox().critical(self, "Operation failed", "Could not list files.", QMessageBox.Ok)
@@ -255,10 +258,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return False
 
     def list_mcu_files(self):
-        self.refresh_mcu_files()
-        self.mcuFilesListView.setModel(self._mcu_files_model)
-
-    def refresh_mcu_files(self):
         try:
             self._mcu_files_model.refresh(self._connection, self._mcu_dir)
         except OperationError:
@@ -402,19 +401,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._connection.send_block(content)
 
     def open_local_file(self, idx):
-        assert isinstance(idx, QModelIndex)
+        try:
+            assert isinstance(idx, QModelIndex)
+        except:
+            idx = self.localFilesListView.currentIndex()
+
         model = self._local_files_model
         assert isinstance(model, FileSystemModel)
 
-        local_path = model.filePath(idx)
+        local_path = self.get_local_file_selection(absolute_path=True)[0]
+        if os.path.isdir(local_path):
+            self.navigate_directory(local_path)
+            return
 
-        if model.isDir(idx):
-            self.navigate_directory(os.path.join(self._root_dir,local_path))
-
-        #FIXME Double click on a file, what do we do?
-        return
-
-        remote_path = local_path.rsplit("/", 1)[1]
+        _,remote_path = os.path.split(local_path)
         remote_path = self._mcu_dir + remote_path
 
         if Settings().external_editor_path:
@@ -429,14 +429,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._code_editor.set_code(local_path, remote_path, text)
 
     def mcu_file_selection_changed(self):
+        #print("here?")
         idx = self.mcuFilesListView.currentIndex()
         assert isinstance(idx, QModelIndex)
-        if idx.row() >= 0:
+
+        model = self._mcu_files_model
+        assert isinstance(model, FileSystemModel)
+        file_path = model.data(idx, Qt.EditRole)
+        if file_path is None:
+            return
+
+        if file_path.endswith(".py") or file_path.endswith(".mpy"):
+            self.mcuFilesListView.actions["Execute"].setEnabled(True)
             self.executeButton.setEnabled(True)
+        else:
+            self.mcuFilesListView.actions["Execute"].setEnabled(False)
+            self.executeButton.setEnabled(False)
+
+        if idx.row() >= 0:
             self.removeButton.setEnabled(True)
             self.transferToPcButton.setEnabled(True)
         else:
-            self.executeButton.setEnabled(False)
             self.removeButton.setEnabled(False)
             self.transferToPcButton.setEnabled(False)
 
@@ -484,6 +497,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             remote_path = local_files[0]
             remote_path = self._mcu_dir + remote_path
             self.remoteNameEdit.setText(remote_path)
+
+            #Change the local context menu...
+            if local_files[0].endswith(".py"):
+                self.localFilesListView.actions["Compile"].setEnabled(True)
+            else:
+                self.localFilesListView.actions["Compile"].setEnabled(False)
+
+            if self._connection is not None and self._connection.is_connected():
+                self.localFilesListView.actions["Transfer"].setEnabled(True)
+            else:
+                self.localFilesListView.actions["Transfer"].setEnabled(False)
+                
+
         else:
             self.remoteNameEdit.setText("")
 
@@ -527,7 +553,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.transfer_to_mcu(compiled_file_paths)
 
         #All done, let's refresh the local Panel
-        self.refresh_local_files()
+        self.list_local_files()
 
     def finished_read_mcu_file(self, file_name, transfer):
         assert isinstance(transfer, FileTransfer)
@@ -559,7 +585,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             else:
                 # This ensures _mcu_dir always ends with a "/" and can easily be concatenated with a filename
                 self._mcu_dir = self._mcu_dir + file_path + "/"
-            self.refresh_mcu_files()
+            self.list_mcu_files()
             return
 
         progress_dlg = FileTransferDialog(FileTransferDialog.DOWNLOAD)

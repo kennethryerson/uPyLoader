@@ -20,6 +20,9 @@ class FileListView(QListView):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.showContextMenu)
 
+        # We keep a dictionary of actions...
+        self.actions = {}
+
 
     def _add_menu_action(self, title, handler):
         if title.startswith("|"):
@@ -29,6 +32,8 @@ class FileListView(QListView):
         action = QAction(title, self.context_menu)
         action.triggered.connect(handler)
         self.context_menu.addAction(action)
+        self.actions[title] = action
+
         return action
 
     def showContextMenu(self, pt):
