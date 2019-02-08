@@ -493,14 +493,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         #FIXME re-implement the method using original code
         local_files = self.get_local_file_selection(absolute_path=True)
         compiled_file_paths = []
-        compile_error = False
-        for local_path in path_steps:
+        for local_path,_ in path_steps:
+            if local_path is None: continue
             f , ext = os.path.splitext(local_path)
-            if ext is not ".py":
-                continue
+            if ext != ".py": continue
+
             mpy_path = f + ".mpy"
-            if os.path.exists(mpy_path):
-                os.remove(mpy_path)
+            if os.path.exists(mpy_path): os.remove(mpy_path)
 
             try:
                 with subprocess.Popen([Settings().mpy_cross_path, os.path.basename(local_path)],
@@ -513,24 +512,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                         continue
 
             except OSError:
-                compile_error = True
-                break
                 QMessageBox.warning(self, "Compilation error", "Failed to run mpy-cross")
                 break
 
             compiled_file_paths += [mpy_path]
 
-        if compile_error:
-            return
-
         # Force view to update so that it sees compiled files added
-        self.localFilesListView.repaint()
+        #self.localFilesListView.repaint()
         QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
 
         #Transfer the files to the MCU.
         if (self.autoTransferCheckBox.isChecked() and self._connection \
                 and self._connection.is_connected() and compiled_file_paths):
-            self.transfer_to_mcu(compile_file_paths)
+            self.transfer_to_mcu(compiled_file_paths)
 
         #All done, let's refresh the local Panel
         self.refresh_local_files()

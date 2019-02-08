@@ -1,4 +1,5 @@
 from PyQt5.QtCore import QDir
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog
 from PyQt5.QtWidgets import QFileDialog
@@ -69,9 +70,22 @@ class SettingsDialog(QDialog, Ui_SettingsDialog):
             self.externalPathLineEdit.setText(path[0])
 
     def browse_mpy_cross(self):
+        import site,os
+
+        # We look in site-packages in case it's there...
+        found = False
+        for s in site.getsitepackages():
+            d = os.path.join(s,'mpy_cross')
+            if os.path.exists(d):
+                found = True
+                break
+
+        if not found:
+            d = QDir().homePath()
+
         path = QFileDialog().getOpenFileName(
             caption="Select mpy-cross compiler",
-            directory=QDir().homePath(),
+            directory=d,
             options=QFileDialog.ReadOnly)
 
         if path[0]:
