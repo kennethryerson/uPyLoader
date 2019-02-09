@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QEvent
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QKeyEvent, QHideEvent, QFontDatabase, QTextCursor
+from PyQt5.QtGui import QFocusEvent, QKeyEvent, QHideEvent, QFontDatabase, QTextCursor, QTextCharFormat, QBrush, QColor
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QDialog, QScrollBar
 
@@ -56,6 +56,11 @@ class TerminalDialog(QDialog, Ui_TerminalDialog):
         self.terminal.read()
         self.outputTextEdit.setText(TerminalDialog.process_backspaces(self.terminal.history))
         self._input_history_index = 0
+
+        #cursor = self.outputTextEdit.textCursor()
+        #fmt = QTextCharFormat()
+        #fmt.setForeground(QBrush(QColor(255,255,255)))
+        #cursor.mergeCharFormat(fmt)
 
     def _stop_scrolling(self):
         self._auto_scroll = False
@@ -168,7 +173,12 @@ class TerminalDialog(QDialog, Ui_TerminalDialog):
                             self.inputTextBox.clear()
                             self.inputTextBox.setPlainText(self.terminal.input(self._input_history_index))
         elif target == self.outputTextEdit:
-            if isinstance(event, QKeyEvent):
+            if isinstance(event, QFocusEvent):
+                if event.type() == QFocusEvent.FocusIn:
+                    self.outputTextEdit.setCursorWidth(1)
+                else:
+                    self.outputTextEdit.setCursorWidth(0)
+            elif isinstance(event, QKeyEvent):
                 if event.type() == QEvent.KeyPress:
                     if event.key() == Qt.Key_Up:
                         self.connection.send_bytes(b"\x1b[A")
@@ -181,6 +191,7 @@ class TerminalDialog(QDialog, Ui_TerminalDialog):
                     return True
         elif target == self.outputTextEdit.verticalScrollBar():
             if isinstance(event, QHideEvent):
+                print("hide?")
                 return True
         return False
 
