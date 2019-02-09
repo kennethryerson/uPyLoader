@@ -9,6 +9,8 @@ from src.helpers.qt_helper import QtHelper
 from src.utility.settings import Settings
 from src.utility.signal_interface import Listener
 
+import re
+
 __author__ = "Ivan Sevcik"
 
 
@@ -98,9 +100,13 @@ class TerminalDialog(QDialog, Ui_TerminalDialog):
         self.terminal.clear()
 
     def update_content(self):
-        new_content = self.terminal.read()
+        #FIXME There must be a better way to handle up and down navigation.
+        s = self.terminal.read()
+        new_content = re.sub('\\x1b\[(.*)[A-Z]', '', s)
+        #print("--->"+s+"<--->"+new_content+"<---")
+
         new_content = self.process_backspaces(new_content)
-        if not new_content:
+        if not s:
             return
 
         scrollbar = self.outputTextEdit.verticalScrollBar()
@@ -110,13 +116,20 @@ class TerminalDialog(QDialog, Ui_TerminalDialog):
 
         prev_cursor = self.outputTextEdit.textCursor()
         self.outputTextEdit.moveCursor(QTextCursor.End)
-        # Use any backspaces that were left in input to delete text
-        cut = 0
-        for x in new_content:
-            if x != "\b":
-                break
-            self.outputTextEdit.textCursor().deletePreviousChar()
-            cut += 1
+        if s != new_content:
+            prev_cursor.select(QTextCursor.LineUnderCursor)
+            prev_cursor.removeSelectedText()
+            cut = 0
+            new_content = ">>> "+new_content
+        else:
+            # Use any backspaces that were left in input to delete text
+            cut = 0
+            for x in new_content:
+                if x != "\b":
+                    break
+                self.outputTextEdit.textCursor().deletePreviousChar()
+                cut += 1
+
         self.outputTextEdit.insertPlainText(new_content[cut:])
         self.outputTextEdit.setTextCursor(prev_cursor)
 
