@@ -140,26 +140,6 @@ class SerialConnection(Connection):
                 ret += c
         return ret
 
-    def check_transfer_scripts_version(self):
-        self._auto_reader_lock.acquire()
-        self._auto_read_enabled = False
-        self.send_kill()
-        self.read_junk()
-        self.send_block("with open(\"__upl.py\") as f:\n  f.readline()\n")
-        self._serial.flush()
-        success = True
-        try:
-            resp = self.read_to_next_prompt()
-            idx = resp.find("#V")
-            if idx < 0 or resp[idx:idx+3] != "#V0":
-                raise ValueError
-        except (TimeoutError, ValueError):
-            success = False
-
-        self._auto_read_enabled = True
-        self._auto_reader_lock.release()
-        return success
-
     @staticmethod
     def _transfer_file_path(transfer_file_name):
         # External transfer scripts folder should be used (use case: files need to be edited)

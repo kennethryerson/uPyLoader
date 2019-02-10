@@ -1,9 +1,12 @@
 import time
 import re
+import os
 from threading import Lock, Thread
 
 from src.utility.exceptions import OperationError
 from src.utility.settings import Settings
+
+__version__ = "1.0"
 
 
 class Connection:
@@ -65,10 +68,8 @@ class Connection:
 
     def run_file(self, file_name, globals_init=""):
         self.send_start_paste()
-        if globals_init:
-            self.send_line(globals_init, "\r")
-        self.send_line("with open(\"{}\") as f:".format(file_name))
-        self.send_line("    exec(f.read(), globals())")
+        f,_ = os.path.splitext(file_name)
+        self.send_line("import {}".format(f[1:].replace("/",".")))
         self.send_end_paste()
 
     def get_file_size(self, file_name):
@@ -196,6 +197,27 @@ class Connection:
             output = [int(val) for val in output]
             self.statvfs = output
             return output
+
+    def check_upl_version(self):
+        # Pause autoreader so we can receive response
+        self._auto_reader_lock.acquire()
+        self._auto_read_enabled = False
+
+        self.send_line("import __upl; __upl.__version__")
+        try:
+            res = self.read_to_next_prompt()
+            res = res.splitlines()[-1].replace('\'','')
+        except TimeoutError:
+            success = False
+
+        self._auto_read_enabled = True
+        self._auto_reader_lock.release()
+
+        success = False
+        if "Error" not in res and res >= __version__:
+            success = True
+
+        return success
 
     def list_files(self,mcu_folder="/"):
         # Pause autoreader so we can receive response

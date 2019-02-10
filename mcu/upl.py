@@ -7,9 +7,6 @@ from ubinascii import a2b_base64,b2a_base64
 
 __version__ = "1.0"
 
-def get_version():
-    return __version__
-
 
 def _read_timeout(cnt, timeout_ms=2000):
     time_support = "ticks_ms" in dir(time)
