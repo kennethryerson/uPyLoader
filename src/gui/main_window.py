@@ -361,7 +361,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self._connection is not None and self._connection.is_connected():
             self.connected()
             if isinstance(self._connection, SerialConnection):
-                if Settings().use_transfer_scripts and not self._connection.check_transfer_scripts_version():
+                if Settings().use_transfer_scripts and not self._connection.check_upl_version():
                     QMessageBox.warning(self,
                                         "Transfer scripts problem",
                                         "Transfer scripts for UART are either"
@@ -474,7 +474,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         def filter_indices(x):
             ret = False
-            if x.column() == 0 and model.filePath(x) != '..':
+            if x.column() == 0:
                 ret = True
             #return x.column() == 0 and not model.isDir(x)
             return ret
@@ -486,7 +486,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Return absolute paths based on currently selected _mcu_dir
         file_paths = [model.filePath(idx) for idx in indices]
         if absolute_path:
-            file_paths = [os.path.join(self._root_dir,fn) for fn in file_paths]
+            file_paths = [os.path.normpath(os.path.join(self._root_dir,fn)) for fn in file_paths]
         return file_paths
 
     def local_file_selection_changed(self):
