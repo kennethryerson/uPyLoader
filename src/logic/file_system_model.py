@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QMenu
 from src.connection.connection import Connection
 from src.gui.icons import Icons
 from src.utility.exceptions import OperationError
+from src.helpers.copy_helper import can_ignore
 
 import os
 
@@ -101,9 +102,7 @@ class FileSystemModel(QStandardItemModel):
                 folder_list = []
 
             for fn in ['..']+folder_list:
-                if fn.startswith(".git") or fn == '__pycache__' or \
-                        fn.startswith('.ipynb') or fn.endswith('.bak') or \
-                        fn.endswith('~') or fn.endswith('.pyc'):
+                if can_ignore(fn):
                     continue
                 output.append(os.path.join(folder,fn))
 

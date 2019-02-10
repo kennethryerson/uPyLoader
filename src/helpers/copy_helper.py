@@ -1,6 +1,14 @@
 import os
 
 #Get all the steps required to copy pc_path to mcu_path, be it a folder or a file
+def can_ignore(file_name):
+    ret = False
+    if file_name.startswith('.git') or file_name.endswith('~') or file_name[:-1].endswith('.sw') or \
+           file_name.endswith('.bak') or file_name.endswith('.pyc') or \
+           file_name == '__pycache__' or file_name.startswith('.ipynb'):
+        ret = True
+    return ret
+
 def copy_steps(pc_path,mcu_path):
     ret = []
     ignore_dirs = []
@@ -22,7 +30,7 @@ def copy_steps(pc_path,mcu_path):
             continue
         c_path = os.path.normpath('/'.join((mcu_path,dest,root.replace(pc_path,'')))).replace(os.sep,'/')
         for d in ['']+dirs:
-            if d.startswith('.git') or d == '__pycache__' or d.startswith('.ipynb'):
+            if can_ignore(d):
                 ignore_dirs.append(os.path.join(root,d))
                 continue
             cc_path = os.path.normpath('/'.join((c_path,d))).replace(os.sep,'/')
@@ -31,7 +39,7 @@ def copy_steps(pc_path,mcu_path):
             ret.append([None,cc_path])
             mcu_tree.append(cc_path)
         for f in files:
-            if f.startswith('.git') or f.endswith('~') or f.endswith('.bak') or f.endswith('.pyc') or f.endswith('.swp'):
+            if can_ignore(f):
                 continue
             cc_path = '/'.join((c_path,f))
             ret.append([os.path.join(root,f).replace(os.sep,'/'),cc_path])
