@@ -272,8 +272,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         model = self._mcu_files_model
         assert isinstance(model, FileSystemModel)
         file_name = model.data(idx, Qt.EditRole)
-        remote_path = self._mcu_dir + file_name
-        self._connection.run_file(remote_path)
+        if file_name is not None:
+            remote_path = self._mcu_dir + file_name
+            self._connection.run_file(remote_path)
 
     def rename_file(self):
         idx = self.mcuFilesListView.currentIndex()
