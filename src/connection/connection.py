@@ -291,6 +291,11 @@ class Connection:
     def _write_steps_job(self, root_dir, path_steps, transfer, set_text=None):
         n_steps = len(path_steps)
 
+        if n_steps > 0:
+            self.send_kill()
+            # Read any leftovers
+            self.read_junk()
+
         for i in range(n_steps):
             local_path,remote_name = path_steps[i]
             title = "Step %d/%d: " % (i+1,n_steps)
